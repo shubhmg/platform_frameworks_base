@@ -2452,5 +2452,6 @@
   <java-symbol type="bool" name="config_passpoint_setting_on" />
 
   <java-symbol type="bool" name="config_useSystemClockforSensors" />
-
+  <!-- Doze invert -->
+  <java-symbol type="bool" name="config_invert_colors_on_doze" />
 </resources>
