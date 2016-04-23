@@ -49,6 +49,7 @@ import com.android.systemui.statusbar.policy.NetworkControllerImpl.SubscriptionD
 import java.io.PrintWriter;
 import java.util.BitSet;
 import java.util.Objects;
+import java.util.List;
 
 
 public class MobileSignalController extends SignalController<
@@ -336,7 +337,7 @@ public class MobileSignalController extends SignalController<
                 icons.mStackedDataIcon, icons.mStackedVoiceIcon,
                 dataContentDescription, description, icons.mIsWide,
                 mSubscriptionInfo.getSubscriptionId(), getImsIconId(),
-                isImsRegisteredInAirplaneMode(), getdataNetworkTypeInRoamingId(),
+                isImsRegisteredInWifi(), getdataNetworkTypeInRoamingId(),
                 getEmbmsIconId());
 
         mCallbackHandler.post(new Runnable() {
@@ -347,19 +348,38 @@ public class MobileSignalController extends SignalController<
         });
     }
 
-    private boolean isImsRegisteredInAirplaneMode() {
-        return mStyle == STATUS_BAR_STYLE_EXTENDED
-                && mPhone != null && mPhone.isImsRegistered()
-                && mCurrentState.airplaneMode;
+    private boolean isImsRegisteredInWifi() {
+        if (mStyle != STATUS_BAR_STYLE_EXTENDED) {
+            return false;
+        }
+
+        List<SubscriptionInfo> subInfos = SubscriptionManager.from(mContext)
+                        .getActiveSubscriptionInfoList();
+        if (subInfos != null) {
+            for (SubscriptionInfo subInfo: subInfos) {
+                int subId = subInfo.getSubscriptionId();
+                if (mPhone != null
+                        && (mPhone.isVoWifiCallingAvailableUsingSubId(subId)
+                        || mPhone.isVideoTelephonyWifiCallingAvailableUsingSubId(subId))) {
+                    return true;
+                }
+            }
+        } else {
+            Log.e(mTag, "Invalid SubscriptionInfo");
+        }
+        return false;
     }
 
     private int getImsIconId() {
-        if (mStyle == STATUS_BAR_STYLE_EXTENDED
-                && isImsRegisteredOnDataSim()) {
-            return R.drawable.ims_services_hd;
-        } else {
+        if (mStyle != STATUS_BAR_STYLE_EXTENDED
+                || isRoaming()) {
             return 0;
         }
+
+        if (mCurrentState.imsRadioTechnology == ServiceState.RIL_RADIO_TECHNOLOGY_LTE) {
+            return R.drawable.volte;
+        }
+        return 0;
     }
 
     private int getdataNetworkTypeInRoamingId() {
@@ -385,11 +405,6 @@ public class MobileSignalController extends SignalController<
         } else {
             return 0;
         }
-    }
-
-    private boolean isImsRegisteredOnDataSim() {
-        return mPhone != null && mPhone.isImsRegistered()
-                && mCurrentState.dataSim && !isRoaming();
     }
 
     private boolean isEmbmsActiveOnDataSim() {
@@ -650,6 +665,10 @@ public class MobileSignalController extends SignalController<
 
         if (mConfig.readIconsFromXml) {
             mCurrentState.voiceLevel = getVoiceSignalLevel();
+        }
+
+        if (mStyle == STATUS_BAR_STYLE_EXTENDED) {
+            mCurrentState.imsRadioTechnology = mServiceState.getRilImsRadioTechnology();
         }
 
         notifyListenersIfNecessary();
@@ -1030,6 +1049,7 @@ public class MobileSignalController extends SignalController<
         boolean isForbidden;
         int dataActivity;
         int voiceLevel;
+        int imsRadioTechnology;
 
         @Override
         public void copyFrom(State s) {
@@ -1046,6 +1066,7 @@ public class MobileSignalController extends SignalController<
             carrierNetworkChangeMode = state.carrierNetworkChangeMode;
             dataActivity = state.dataActivity;
             voiceLevel = state.voiceLevel;
+            imsRadioTechnology = state.imsRadioTechnology;
         }
 
         @Override
@@ -1062,6 +1083,7 @@ public class MobileSignalController extends SignalController<
             builder.append("airplaneMode=").append(airplaneMode).append(',');
             builder.append("voiceLevel=").append(voiceLevel).append(',');
             builder.append("carrierNetworkChangeMode=").append(carrierNetworkChangeMode);
+            builder.append("imsRadioTechnology=").append(imsRadioTechnology);
         }
 
         @Override
@@ -1076,7 +1098,8 @@ public class MobileSignalController extends SignalController<
                     && ((MobileState) o).airplaneMode == airplaneMode
                     && ((MobileState) o).carrierNetworkChangeMode == carrierNetworkChangeMode
                     && ((MobileState) o).voiceLevel == voiceLevel
-                    && ((MobileState) o).isDefault == isDefault;
+                    && ((MobileState) o).isDefault == isDefault
+                    && ((MobileState) o).imsRadioTechnology == imsRadioTechnology;
         }
     }
     //Observer to moniter enabling and disabling of MobileData
